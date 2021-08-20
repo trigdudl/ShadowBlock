@@ -1,0 +1,110 @@
+# -*- coding: utf-8 -*-
+
+"""
+Spyder Editor
+Created on Thu Jul 22 15:30:01 2021
+@author: Trigg
+Program to determine sun orbit parameters from shadow block data
+
+"""
+ 
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import scipy as sp
+from scipy.optimize import curve_fit
+import numpy as np
+import pylab as py
+
+## Read the data from the file
+day,ang = np.loadtxt('Ourrealdata.txt', unpack=True)
+ang = ang + 0.0
+"""day = day - 1.0  ## Subtracting 1 makes Jan 1st the 0 day.  """
+day = day - 1  ## 17897 corrects epoch from 1-jan-70 and subtracting 1 makes Jan 1st the 0 day.
+ 
+## Plot the data and allow user to input best guess parameters
+py.figure(1)
+""""py.clf()"""
+py.plot_date(day,ang,'or', xdate = True, markersize = 2)
+plt.xlabel('time (d)')
+plt.ylabel('angle (degrees)')
+py.show()
+
+A_g = float(input('Estimated tilt: '))
+f_g = float(input('Estimated year length: '))
+phi_g = float(input('Estimated solstice to 1 Jan: '))
+mean_g = float(input('Estimated 90 - Latitude: '))
+ecc_g = float(input('Estimated eccentricity: '))
+per_g = float(input('Estimated perihelion to 1 Jan: '))
+
+a_guess = [A_g,f_g,phi_g,mean_g, ecc_g, per_g]
+"""print(A_g*np.sin(2*np.pi*f_g*365.0 - phi_g) + mean_g)"""
+
+## Do the fit and decode the output
+
+# Define fit_func
+def fit_func(day,A,f,phi,mean,ecc,per):
+    return (180/np.pi)*np.arcsin(np.sin(-A*(np.pi/180.0))*np.cos((2*np.pi*(day + phi)/f)+2.0*ecc*np.sin(2.0*np.pi*(day - per)/f))) + mean
+
+"""return A*np.sin(2*np.pi*f*day - phi) + mean"""
+
+a_fit, cov = curve_fit(fit_func,day,ang,p0=a_guess,maxfev=50000)
+A_fit = a_fit[0]
+f_fit = a_fit[1]
+phi_fit = a_fit[2]
+mean_fit = a_fit[3]
+ecc_fit = a_fit[4]
+per_fit = a_fit[5]
+Lat = 90.0 - mean_fit
+
+sig_A = np.sqrt(cov[0][0])
+sig_f = np.sqrt(cov[1][1])
+sig_phi = np.sqrt(cov[2][2])
+sig_mean = np.sqrt(cov[3][3])
+sig_ecc = np.sqrt(cov[4][4])
+sig_per = np.sqrt(cov[5][5])
+
+## Display the results
+print('Tilt = %g +/- %g degrees' % (A_fit,sig_A))
+print('Year = %g +/- %g days' % (f_fit,sig_f))
+print('Eccentricity = %g +/- %g' % (ecc_fit,sig_ecc))
+print('Latitude = %g +/- %g degrees' % (Lat, sig_mean))
+print('90 - Latitude = %g +/- %g degrees' % (mean_fit, sig_mean))
+print('Solstice shift = %g +/- %g days' % (phi_fit,sig_phi))
+print('Perihelion shift = %g +/- %g days' % (per_fit,sig_per))
+
+x = np.linspace(17897, 17897 + 365*3, 5000)
+V_fit = fit_func(x,A_fit,f_fit,phi_fit,mean_fit,ecc_fit,per_fit)
+plt.figure(dpi=600)
+
+# Major ticks every 6 months.
+## fig, ax = plt.subplots()
+## ax.plot('date', 'adj_close', data=day)
+## fmt_half_year = mdates.MonthLocator(interval=6)
+## ax.xaxis.set_major_locator(fmt_half_year)
+
+plt.plot(x,V_fit,linewidth=1)
+plt.plot_date(day+17898,ang,'or', xdate= True, markersize=2)
+plt.xlabel('time (d)')
+plt.ylabel('angle (degrees)')
+plt.gcf().autofmt_xdate()
+
+# specify the location of (left,bottom),width,height
+rect=plt.Rectangle((17898+per_fit-3*sig_per/2,10),3*sig_per,20,
+                        #fill = True,
+                        #color = "red",
+                        alpha = 0.5,
+                        #linewidth = 5
+                        facecolor = "red")
+
+plt.gca().add_patch(rect)
+
+# add text with text() function in matplotlib
+plt.text(31+17898, 21.3,'Perihelion 3 Jan',fontsize=8, color="red")
+
+## plt.axvline(x=17898-phi_fit, linewidth=1)
+plt.axvline(x=17898+per_fit, linewidth=1, label='perihelion measured')
+plt.axvline(x=17898+2, linewidth=1, label='perihelion accepted 3 Jan 2019', c='g')
+plt.axvline(x=17898-phi_fit, linewidth=1, label='winter solstice measured 21 Dec 2018', c='r')
+plt.legend(loc="upper right")
+""""plt.grid()"""
+plt.show()
